@@ -1,0 +1,11 @@
+.dart_tool/
+.buildlog/
+.packages
+flutter_export_environment.sh
+build/
+.idea/
+.vscode/
+**/*.iml
+
+# Local databases
+assets/databases/*.db
