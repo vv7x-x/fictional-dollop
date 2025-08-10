@@ -3,7 +3,6 @@
 
 import argparse
 import json
-import os
 import sqlite3
 from pathlib import Path
 
@@ -53,6 +52,11 @@ CREATE INDEX IF NOT EXISTS idx_verses_surah ON verses(surah_id, ayah_number);
 CREATE INDEX IF NOT EXISTS idx_tafsir_verse ON tafsir(verse_id);
 CREATE INDEX IF NOT EXISTS idx_hadiths_text ON hadiths(text_ar);
 CREATE INDEX IF NOT EXISTS idx_stories_title ON stories(title);
+
+-- FTS5 virtual tables for fast full-text search
+CREATE VIRTUAL TABLE IF NOT EXISTS tafsir_fts USING fts5(text, content='');
+CREATE VIRTUAL TABLE IF NOT EXISTS hadiths_fts USING fts5(text_ar, sanad, content='');
+CREATE VIRTUAL TABLE IF NOT EXISTS stories_fts USING fts5(title, content, content='');
 '''
 
 
@@ -105,6 +109,18 @@ def import_stories(conn, stories_json: Path):
   ])
 
 
+def populate_fts(conn):
+  cur = conn.cursor()
+  # Clear existing
+  cur.execute('DELETE FROM tafsir_fts')
+  cur.execute('DELETE FROM hadiths_fts')
+  cur.execute('DELETE FROM stories_fts')
+  # Populate with rowid aligned to base table ids
+  cur.execute('INSERT INTO tafsir_fts(rowid, text) SELECT id, text FROM tafsir')
+  cur.execute('INSERT INTO hadiths_fts(rowid, text_ar, sanad) SELECT id, text_ar, sanad FROM hadiths')
+  cur.execute('INSERT INTO stories_fts(rowid, title, content) SELECT id, title, content FROM stories')
+
+
 def main():
   parser = argparse.ArgumentParser(description='Convert JSON datasets to a single SQLite database (knowledge.db).')
   parser.add_argument('--tafsir', type=Path, default=Path('assets/json/tafsir_sample.json'))
@@ -125,6 +141,7 @@ def main():
       import_hadiths(conn, args.hadiths)
     if args.stories and args.stories.exists():
       import_stories(conn, args.stories)
+    populate_fts(conn)
     conn.commit()
     print(f"SQLite database created at: {out_path}")
   finally:
